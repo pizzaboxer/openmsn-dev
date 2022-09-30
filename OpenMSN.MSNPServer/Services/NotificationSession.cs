@@ -6,12 +6,15 @@ using NetCoreServer;
 using OpenMSN.MSNPServer.Extensions;
 using OpenMSN.MSNPServer.Operations.Base;
 
+using OpenMSN.Data.Entities;
+
 namespace OpenMSN.MSNPServer.Services
 {
     public class NotificationSession : TcpSession
     {
         public int ProtocolVersion = 0;
         public bool Authenticated = false;
+        public User CurrentUser = null!;
 
         public NotificationSession(TcpServer server) : base(server) { }
 
@@ -48,16 +51,44 @@ namespace OpenMSN.MSNPServer.Services
             else if (args.Length > 1)
                 args = args.Skip(2).ToArray();
 
+            // strip newline from end of last arg
+            if (args.Length > 0)
+            {
+                int last = args.Length - 1;
+                if (args[last].EndsWith("\r\n"))
+                    args[last] = args[last][..^2];
+            }
+
             try
             {
                 switch (opcode)
                 {
-                    case Operations.VER_Version.Command:
-                        Operations.VER_Version.Handle(this, transactionId, args);
+                    case Operations.VER_VersionNegotiation.Command:
+                        Operations.VER_VersionNegotiation.Handle(this, transactionId, args);
                         break;
 
                     case Operations.INF_AuthInfo.Command:
                         Operations.INF_AuthInfo.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.USR_UserLogon.Command:
+                        Operations.USR_UserLogon.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.SYN_Synchronization.Command:
+                        Operations.SYN_Synchronization.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.CHG_ChangeStatus.Command:
+                        Operations.CHG_ChangeStatus.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.CVR_ClientVersion.Command:
+                        Operations.CVR_ClientVersion.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.FND_FindPeople.Command:
+                        Operations.FND_FindPeople.Handle(this, transactionId, args);
                         break;
                 }
             }

@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using OpenMSN.MSNPServer.Operations.Base;
+﻿using OpenMSN.MSNPServer.Operations.Base;
 using OpenMSN.MSNPServer.Services;
 
 namespace OpenMSN.MSNPServer.Operations
@@ -12,6 +6,7 @@ namespace OpenMSN.MSNPServer.Operations
     /// <summary>
     /// [INF] Authentication Information.
     /// Delivers information on how to handle user authentication.
+    /// MSNP2: INF [TransactionID] MD5
     /// </summary>
     /// <remarks>https://protogined.wordpress.com/msnp2/#cmd-inf</remarks>
     public class INF_AuthInfo

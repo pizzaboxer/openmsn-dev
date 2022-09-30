@@ -1,16 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-
-using OpenMSN.Data;
-using OpenMSN.MSNPServer.Services;
-
+﻿using OpenMSN.MSNPServer.Services;
 using System.Net;
-
-using IHost host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices((_, services) => services.AddDbContext<ApplicationDbContext>())
-    .Build();
-
-await host.RunAsync();
 
 namespace OpenMSN.MSNPServer
 {

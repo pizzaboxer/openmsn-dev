@@ -4,7 +4,6 @@ using OpenMSN.Data;
 using OpenMSN.Website.Models;
 using OpenMSN.Website.Services;
 using System.Diagnostics;
-using System.Security.Claims;
 
 namespace OpenMSN.Website.Controllers
 {
@@ -19,8 +18,7 @@ namespace OpenMSN.Website.Controllers
             _dbContext = dbContext;
         }
 
-        [AllowAnonymous]
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
             return View();
         }
@@ -31,7 +29,6 @@ namespace OpenMSN.Website.Controllers
             return View();
         }
 
-        [AllowAnonymous]
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
         {

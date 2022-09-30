@@ -6,6 +6,10 @@ using System.Text;
 using System.Threading.Tasks;
 using Isopoh.Cryptography.Argon2;
 using Microsoft.EntityFrameworkCore;
+using MimeKit;
+using MimeKit.Text;
+using MailKit.Security;
+using MailKit.Net.Smtp;
 
 namespace OpenMSN.Data.Entities
 {
@@ -13,14 +17,15 @@ namespace OpenMSN.Data.Entities
     public class User
     {
         public int Id { get; set; }
-        public string EmailAddress { get; set; } = null!;
         public bool Activated { get; set; } = false;
-        public string ActivationToken { get; set; } = null!;
+        public string ActivationToken { get; set; } = Guid.NewGuid().ToString();
+        public string Username { get; set; } = null!;
+        public string EmailAddress { get; set; } = null!;
         public string PasswordHash { get; set; } = null!;
         public string PasswordHashMD5 { get; set; } = null!;
         public string MD5Salt { get; set; } = null!;
-        public long TimeCreated { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        
+        public DateTimeOffset TimeCreated { get; set; } = DateTimeOffset.UtcNow;
+
         public bool CanLogin()
         {
             if (!Activated)
@@ -37,7 +42,7 @@ namespace OpenMSN.Data.Entities
             //
             // it goes a bit something like this:
             //  > the server sends the client a salt
-            //  > the client sends the server an md5 hash in the form of password+salt
+            //  > the client sends the server an md5 hash in the form of salt+password
             //  > the server authenticates based on that
             //
             // back then, a different salt would've been sent every time (usually the current unix timestamp)
@@ -49,15 +54,15 @@ namespace OpenMSN.Data.Entities
             // generate md5 salt (random 20-char length hex string)
             byte[] buffer = new byte[10];
             new Random().NextBytes(buffer);
-            MD5Salt = Convert.ToHexString(buffer);
+            MD5Salt = Convert.ToHexString(buffer).ToLower();
 
             // generate argon2-md5 hash
             using (MD5 md5 = MD5.Create())
             {
-                byte[] inputBytes = Encoding.ASCII.GetBytes(password + MD5Salt);
+                byte[] inputBytes = Encoding.ASCII.GetBytes(MD5Salt + password);
                 byte[] hashBytes = md5.ComputeHash(inputBytes);
 
-                string md5_digest = Convert.ToHexString(hashBytes);
+                string md5_digest = Convert.ToHexString(hashBytes).ToLower();
                 PasswordHashMD5 = Argon2.Hash(md5_digest);
             }
         }
@@ -69,14 +74,36 @@ namespace OpenMSN.Data.Entities
 
         public bool VerifyPasswordMD5(string password)
         {
-            using (MD5 md5 = MD5.Create())
-            {
-                byte[] inputBytes = Encoding.ASCII.GetBytes(password + MD5Salt);
-                byte[] hashBytes = md5.ComputeHash(inputBytes);
+            //using (MD5 md5 = MD5.Create())
+            //{
+            //    byte[] inputBytes = Encoding.ASCII.GetBytes(password);
+            //    byte[] hashBytes = md5.ComputeHash(inputBytes);
 
-                string md5_digest = Convert.ToHexString(hashBytes);
-                return Argon2.Verify(PasswordHashMD5, md5_digest);
-            }
+            //    string md5_digest = Convert.ToHexString(hashBytes);
+            //    return Argon2.Verify(PasswordHashMD5, md5_digest);
+            //}
+
+            return Argon2.Verify(PasswordHashMD5, password);
         }
+
+        //public async Task SendEmail(string subject, TextPart body)
+        //{
+        //    MimeMessage message = new();
+
+        //    message.From.Add(MailboxAddress.Parse("no-reply@openmsn.pizzaboxer.xyz"));
+        //    message.To.Add(MailboxAddress.Parse(EmailAddress));
+
+        //    message.Subject = subject;
+        //    message.Body = body;
+
+        //    using (SmtpClient smtp = new())
+        //    {
+        //        await smtp.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls);
+        //        await smtp.AuthenticateAsync("no-reply@openmsn.pizzaboxer.xyz", "");
+                
+        //        await smtp.SendAsync(message);
+        //        await smtp.DisconnectAsync(true);
+        //    }
+        //}
     }
 }

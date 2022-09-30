@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using OpenMSN.MSNPServer.Operations.Base;
+﻿using OpenMSN.MSNPServer.Operations.Base;
 using OpenMSN.MSNPServer.Services;
 
 namespace OpenMSN.MSNPServer.Operations
@@ -12,9 +6,10 @@ namespace OpenMSN.MSNPServer.Operations
     /// <summary>
     /// [VER] Version Negotiation.
     /// Negotiates with the client on what protocol version to use.
+    /// MSNP2: VER [TransactionID] [ProtocolVersion]...
     /// </summary>
     /// <remarks>https://protogined.wordpress.com/msnp2/#cmd-ver</remarks>
-    public class VER_Version
+    public class VER_VersionNegotiation
     {
         public const string Command = "VER";
 
@@ -35,7 +30,12 @@ namespace OpenMSN.MSNPServer.Operations
             }
 
             if (session.ProtocolVersion == 0)
-                throw new OperationException($"Failed to negotiate protocol version ({args})");
+            {
+                session.LogDebug($"Failed to negotiate protocol version ({args})");
+                session.SendAsync($"{Command} {transactionId} 0\r\n");
+                session.Disconnect();
+                return;
+            }
 
             session.LogDebug($"Negotiated protocol version (MSNP{session.ProtocolVersion})");
 

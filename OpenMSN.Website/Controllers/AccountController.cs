@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using OpenMSN.Website.Models;
 using OpenMSN.Website.Services;
 using OpenMSN.Data;
@@ -19,7 +18,6 @@ namespace OpenMSN.Website.Controllers
         }
 
         [HttpGet]
-        [AllowAnonymous]
         public IActionResult Login(string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
@@ -27,10 +25,12 @@ namespace OpenMSN.Website.Controllers
         }
 
         [HttpPost]
-        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
         {
+            if (_authenticationManager.IsAuthenticated)
+                return LocalRedirect(returnUrl ?? "/");
+
             ViewData["ReturnUrl"] = returnUrl;
 
             if (!ModelState.IsValid)
@@ -50,33 +50,40 @@ namespace OpenMSN.Website.Controllers
                 return View(model);
             }
 
+            if (!user.Activated)
+            {
+                ModelState.AddModelError("EmailAddress", "Account is currently pending activation. Please check your email inbox to activate.");
+                return View(model);
+            }
+
             await _authenticationManager.SignInAsync(user.Id);
 
             return LocalRedirect(returnUrl ?? "/");
         }
 
-        [AllowAnonymous]
         [HttpGet]
         public IActionResult Register()
         {
             return View();
         }
 
-        [AllowAnonymous]
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(RegisterViewModel model)
         {
+            if (_authenticationManager.IsAuthenticated)
+                return LocalRedirect("/");
+
             if (!ModelState.IsValid)
                 return View(model);
 
             if (_dbContext.Users.Count() > 0)
             {
-                User? existingUser = _dbContext.Users.Where(x => x.EmailAddress == model.EmailAddress).First();
+                User? existingUser = _dbContext.Users.Where(x => x.EmailAddress == model.EmailAddress).FirstOrDefault();
 
                 if (existingUser is not null)
                 {
-                    if (existingUser.EmailAddressVerified)
+                    if (existingUser.Activated)
                     {
                         ModelState.AddModelError("EmailAddress", "An account already exists with this email address.");
                         return View(model);
@@ -89,25 +96,53 @@ namespace OpenMSN.Website.Controllers
                 }
             }
 
-            User user = new() { EmailAddress = model.EmailAddress };
+            User user = new() { Username = model.EmailAddress, EmailAddress = model.EmailAddress };
             user.SetPassword(model.Password);
 
             _dbContext.Add(user);
             await _dbContext.SaveChangesAsync();
 
-            //await _authenticationManager.SignInAsync(user.Id);
+            //TextPart message = new(TextFormat.Html);
+            //message.Text = $"Click <a href=\"https://{HttpContext.Request.Host}/Account/Activation?token={user.ActivationToken}\">here</a> to verify.";
 
-            //return LocalRedirect("/");
+            //await user.SendEmail("OpenMSN Account Activation", message);
 
-            return LocalRedirect("/Account/VerifyEmail");
+            return LocalRedirect("/Account/Activation");
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
-            await _authenticationManager.SignOutAsync();
+            // don't use authorize attribute, since if we're not logged in it would just ask us to log in anyway
+            if (_authenticationManager.IsAuthenticated)
+                await _authenticationManager.SignOutAsync();
+
             return LocalRedirect("/");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Activation(string? token = null)
+        {
+            if (_authenticationManager.IsAuthenticated)
+                return LocalRedirect("/");
+
+            if (token is not null)
+            {
+                User? user = _dbContext.Users.Where(x => x.ActivationToken == token && !x.Activated).FirstOrDefault();
+
+                if (user is not null)
+                {
+                    user.Activated = true;
+
+                    await _dbContext.SaveChangesAsync();
+
+                    await _authenticationManager.SignInAsync(user.Id);
+                    return LocalRedirect("/");
+                }
+            }
+
+            return View();
         }
     }
 }
