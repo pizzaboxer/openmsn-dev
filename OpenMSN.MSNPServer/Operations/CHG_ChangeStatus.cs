@@ -1,5 +1,7 @@
 ﻿using OpenMSN.MSNPServer.Operations.Base;
 using OpenMSN.MSNPServer.Services;
+using System.Numerics;
+using System;
 
 namespace OpenMSN.MSNPServer.Operations
 {
@@ -12,12 +14,25 @@ namespace OpenMSN.MSNPServer.Operations
     /// https://datatracker.ietf.org/doc/html/draft-movva-msn-messenger-protocol#section-7.7
     /// https://protogined.wordpress.com/msnp2/#cmd-chg
     /// </remarks>
-    public class CHG_ChangeStatus
+    public static class CHG_ChangeStatus
     {
         public const string Command = "CHG";
 
-        public static readonly OperationConfig Config = new()
+        static readonly string[] Statuses = new[]
         {
+            "NLN",
+            "BSY",
+            "IDL", 
+            "BRB",
+            "AWY",
+            "PHN",
+            "LUN",
+            "HDN"
+        };
+
+        static readonly OperationConfig Config = new()
+        {
+            AuthenticationRequired = true,
             MinProtocolVersion = 0,
             MinArgLength = 1
         };
@@ -26,11 +41,26 @@ namespace OpenMSN.MSNPServer.Operations
         {
             Config.Assert(session, transactionId, args);
 
+            //  C->S: CHG [TransactionID] [Status]
+            //  S->C: CHG [TransactionID] [Status]
+
             string status = args[0];
 
-            // TODO: propagate status to other clients on NS
+            if (!Statuses.Contains(status))
+            {
+                session.SendAsync($"{OperationError.ERR_INVALID_PARAMETER} {transactionId}\r\n");
+                return;
+            }
 
-            // all we have to do is just echo it back for acknowledgement
+            if (status == session.Status)
+            {
+                session.SendAsync($"{OperationError.ERR_ALREADY_IN_THE_MODE} {transactionId}\r\n");
+                return;
+            }
+
+            session.Status = status;
+            session.BroadcastToList("FL", $"NLN {status} {session.User.EmailAddress} {session.User.Username}\r\n");
+
             session.SendAsync($"{Command} {transactionId} {status}\r\n");
         }
     }

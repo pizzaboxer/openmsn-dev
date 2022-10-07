@@ -15,6 +15,7 @@ namespace OpenMSN.MSNPServer.Operations
 
         public static readonly OperationConfig Config = new()
         {
+            AuthenticationRequired = true,
             MinProtocolVersion = 0,
             MaxProtocolVersion = 7,
             MinArgLength = 5

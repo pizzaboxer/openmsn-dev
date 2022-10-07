@@ -56,7 +56,7 @@ namespace OpenMSN.Website.Controllers
                 return View(model);
             }
 
-            await _authenticationManager.SignInAsync(user.Id);
+            await _authenticationManager.SignInAsync(user.UserId);
 
             return LocalRedirect(returnUrl ?? "/");
         }
@@ -137,7 +137,7 @@ namespace OpenMSN.Website.Controllers
 
                     await _dbContext.SaveChangesAsync();
 
-                    await _authenticationManager.SignInAsync(user.Id);
+                    await _authenticationManager.SignInAsync(user.UserId);
                     return LocalRedirect("/");
                 }
             }

@@ -12,11 +12,17 @@ namespace OpenMSN.MSNPServer.Services
 {
     public class NotificationSession : TcpSession
     {
+        public readonly NotificationServer NotificationServer;
+
         public int ProtocolVersion = 0;
         public bool Authenticated = false;
-        public User CurrentUser = null!;
+        public User User = null!;
+        public string Status = "FLN";
 
-        public NotificationSession(TcpServer server) : base(server) { }
+        public NotificationSession(NotificationServer server) : base(server) 
+        {
+            NotificationServer = server;
+        }
 
         protected override void OnConnected()
         {
@@ -41,15 +47,23 @@ namespace OpenMSN.MSNPServer.Services
             if (args.Length < 1)
                 return;
 
-            string opcode = args[0];
-            int transactionId;
+            string operation = args[0];
+            int transactionId = 0;
 
-            Int32.TryParse(args[1], out transactionId);
+            if (args.Length > 1)
+            {
+                Int32.TryParse(args[1], out transactionId);
 
-            if (transactionId == 0)
-                args = args.Skip(1).ToArray();
-            else if (args.Length > 1)
-                args = args.Skip(2).ToArray();
+                if (transactionId == 0)
+                    args = args.Skip(1).ToArray();
+                else if (args.Length > 1)
+                    args = args.Skip(2).ToArray();
+            }
+            else
+            {
+                if (operation.EndsWith("\r\n"))
+                    operation = operation[..^2];
+            }
 
             // strip newline from end of last arg
             if (args.Length > 0)
@@ -61,7 +75,7 @@ namespace OpenMSN.MSNPServer.Services
 
             try
             {
-                switch (opcode)
+                switch (operation)
                 {
                     case Operations.VER_VersionNegotiation.Command:
                         Operations.VER_VersionNegotiation.Handle(this, transactionId, args);
@@ -75,8 +89,8 @@ namespace OpenMSN.MSNPServer.Services
                         Operations.USR_UserLogon.Handle(this, transactionId, args);
                         break;
 
-                    case Operations.SYN_Synchronization.Command:
-                        Operations.SYN_Synchronization.Handle(this, transactionId, args);
+                    case Operations.SYN_SynchronizeContacts.Command:
+                        Operations.SYN_SynchronizeContacts.Handle(this, transactionId, args);
                         break;
 
                     case Operations.CHG_ChangeStatus.Command:
@@ -89,6 +103,26 @@ namespace OpenMSN.MSNPServer.Services
 
                     case Operations.FND_FindPeople.Command:
                         Operations.FND_FindPeople.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.ADD_AddPerson.Command:
+                        Operations.ADD_AddPerson.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.LST_ListContacts.Command:
+                        Operations.LST_ListContacts.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.SND_SendInvitation.Command:
+                        Operations.SND_SendInvitation.Handle(this, transactionId, args);
+                        break;
+
+                    case Operations.OUT_Logout.Command:
+                        Operations.OUT_Logout.Handle(this, transactionId, args);
+                        break;
+
+                    default:
+                        LogDebug($"Unknown operation received '{operation}'");
                         break;
                 }
             }
@@ -114,6 +148,44 @@ namespace OpenMSN.MSNPServer.Services
         public void LogDebug(string message)
         {
             Console.WriteLine($"[Notification/{Id}/LogDebug] {message}");
+        }
+
+        public bool CanContact(NotificationSession targetSession)
+        {
+            if (!this.Authenticated || !targetSession.Authenticated)
+                return false;
+
+            User targetUser = targetSession.User;
+
+            // BLP - Message Privacy Configuration : BLP [TransactionID] [ListVersion] [Setting]
+            // https://protogined.wordpress.com/msnp2/#cmd-blp
+            // this configures who can message the user
+            // AL = anyone not on the block list can message the user
+            // BL = only users on the allow list can message the user
+
+            if (targetUser.ContactPolicy == "AL" && targetUser.Contacts.Any(x => x.List == "BL" && x.TargetUserId == this.User.UserId))
+                return false;
+
+            if (targetUser.ContactPolicy == "BL" && !targetUser.Contacts.Any(x => x.List == "AL" && x.TargetUserId == this.User.UserId))
+                return false;
+
+            return true;
+        }
+
+        public void BroadcastToList(string list, string message, bool abideByPrivacy = true)
+        {
+            this.LogDebug($"Broadcasting message \"{message.ToLiteral()}\" to list {list}");
+
+            foreach (NotificationSession session in this.NotificationServer.NotificationSessions.Values)
+            {
+                if (!this.User.Contacts.Any(x => x.List == list && x.TargetUserId == session.User.UserId))
+                    continue;
+                
+                if (abideByPrivacy && !session.CanContact(this))
+                    continue;
+
+                session.SendAsync(message);
+            }
         }
     }
 }

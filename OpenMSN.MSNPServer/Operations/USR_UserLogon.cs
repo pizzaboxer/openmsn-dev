@@ -3,13 +3,14 @@ using OpenMSN.MSNPServer.Services;
 
 using OpenMSN.Data;
 using OpenMSN.Data.Entities;
+using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 
 namespace OpenMSN.MSNPServer.Operations
 {
     /// <summary>
     /// [USR] User Logon.
     /// Handles user authentication.
-    /// MSNP2: USR [TransactionID] MD5 [Stage] [Parameter]
     /// </summary>
     /// <remarks>https://protogined.wordpress.com/msnp2/#cmd-usr</remarks>
     public class USR_UserLogon
@@ -38,7 +39,7 @@ namespace OpenMSN.MSNPServer.Operations
             }
         }
 
-        public static void HandleMD5(NotificationSession session, int transactionId, string[] args)
+        public static async void HandleMD5(NotificationSession session, int transactionId, string[] args)
         {
             string stage = args[1];
 
@@ -49,7 +50,11 @@ namespace OpenMSN.MSNPServer.Operations
                 //  C->S: USR [TransactionID] MD5 I [Account]
                 //  S->C: USR [TransactionID] MD5 S [Challenge]
 
-                User? user = dbContext.Users.Where(x => x.EmailAddress == args[2]).FirstOrDefault();
+                User? user = dbContext.Users
+                    .Where(x => x.EmailAddress == args[2])
+                    .Include(user => user.Contacts)
+                    .ThenInclude(contact => contact.TargetUser)
+                    .FirstOrDefault();
 
                 if (user is null)
                 {
@@ -58,7 +63,12 @@ namespace OpenMSN.MSNPServer.Operations
                     return;
                 }
 
-                session.CurrentUser = user;
+                var contacts = dbContext.Contacts
+                    .Include(x => x.TargetUser)
+                    .Where(x => x.UserId == user.UserId)
+                    .ToList();
+
+                session.User = user;
 
                 session.SendAsync($"{Command} {transactionId} MD5 S {user.MD5Salt}\r\n");
             }
@@ -67,15 +77,15 @@ namespace OpenMSN.MSNPServer.Operations
                 //  C->S: USR [TransactionID] MD5 S [Hashed Response]
                 //  S->C: USR [TransactionID] OK [Account] [Nickname]
 
-                if (session.CurrentUser is null)
+                if (session.User is null)
                 {
                     session.LogDebug("MD5 authentication failed (CurrentUser is null)");
                 }
-                else if (!session.CurrentUser.VerifyPasswordMD5(args[2]))
+                else if (!session.User.VerifyPasswordMD5(args[2]))
                 {
                     session.LogDebug("MD5 authentication failed (Failed to verify password)");
                 }
-                else if (!session.CurrentUser.CanLogin())
+                else if (!session.User.CanLogin())
                 {
                     session.LogDebug("MD5 authentication failed (CurrentUser is not allowed to login at this time)");
                 }
@@ -90,9 +100,9 @@ namespace OpenMSN.MSNPServer.Operations
                     return;
                 }
 
-                session.LogDebug($"MD5 authentication succeeded for {session.CurrentUser.EmailAddress}");
+                session.LogDebug($"MD5 authentication succeeded for {session.User.EmailAddress}");
 
-                session.SendAsync($"{Command} {transactionId} OK {session.CurrentUser.EmailAddress} {session.CurrentUser.Username}\r\n");
+                session.SendAsync($"{Command} {transactionId} OK {session.User.EmailAddress} {session.User.Username}\r\n");
             }
             else
             {

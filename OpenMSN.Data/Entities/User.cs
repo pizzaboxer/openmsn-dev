@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 using Isopoh.Cryptography.Argon2;
 using Microsoft.EntityFrameworkCore;
 using MimeKit;
@@ -16,15 +12,23 @@ namespace OpenMSN.Data.Entities
     [Index(nameof(EmailAddress), IsUnique = true)]
     public class User
     {
-        public int Id { get; set; }
+        public int UserId { get; set; }
+
         public bool Activated { get; set; } = false;
         public string ActivationToken { get; set; } = Guid.NewGuid().ToString();
+
         public string Username { get; set; } = null!;
         public string EmailAddress { get; set; } = null!;
         public string PasswordHash { get; set; } = null!;
         public string PasswordHashMD5 { get; set; } = null!;
         public string MD5Salt { get; set; } = null!;
-        public DateTimeOffset TimeCreated { get; set; } = DateTimeOffset.UtcNow;
+
+        public List<Contact> Contacts { get; set; } = null!;
+        public int ContactListVersion { get; set; } = 0;
+        public bool ContactAlertOnAdd { get; set; } = true;
+        public string ContactPolicy { get; set; } = "AL";
+
+        public DateTimeOffset TimeAdded { get; set; } = DateTimeOffset.UtcNow;
 
         public bool CanLogin()
         {
@@ -72,18 +76,9 @@ namespace OpenMSN.Data.Entities
             return Argon2.Verify(PasswordHash, password);
         }
 
-        public bool VerifyPasswordMD5(string password)
+        public bool VerifyPasswordMD5(string hash)
         {
-            //using (MD5 md5 = MD5.Create())
-            //{
-            //    byte[] inputBytes = Encoding.ASCII.GetBytes(password);
-            //    byte[] hashBytes = md5.ComputeHash(inputBytes);
-
-            //    string md5_digest = Convert.ToHexString(hashBytes);
-            //    return Argon2.Verify(PasswordHashMD5, md5_digest);
-            //}
-
-            return Argon2.Verify(PasswordHashMD5, password);
+            return Argon2.Verify(PasswordHashMD5, hash);
         }
 
         //public async Task SendEmail(string subject, TextPart body)
